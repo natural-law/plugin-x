@@ -20,15 +20,18 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
-****************************************************************************/
+ ****************************************************************************/
 package org.cocos2dx.plugin;
 
+import java.net.URLDecoder;
 import java.util.Hashtable;
 
+import org.cocos2dx.libSocialTwitter.R;
 import org.cocos2dx.plugin.TwitterApp.TwDialogListener;
 
 import android.app.Activity;
 import android.content.Context;
+import android.content.res.Resources;
 import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
 import android.util.Log;
@@ -39,16 +42,24 @@ public class ShareTwitter implements InterfaceShare {
 	private static Activity mContext = null;
 	private static InterfaceShare mShareAdapter = null;
 	protected static boolean bDebug = false;
-	private static String CONSUMER_KEY="";
-	private static String CONSUMER_SECRET="";
 	
+	private static String CONSUMER_KEY = "";
+	private static String CONSUMER_SECRET = "";
+	private static String TWITPIC_API_KEY = ""; //support twitpic
+
 	private static TwitterApp mTwitter = null;
 	private static boolean isInitialized = false;
 	private static Hashtable<String, String> mShareInfo = null;
-	
-	public static String KEY_TEXT="SharedText";
+
+	private final static String KEY_CONSUMER_KEY = "TwitterKey";
+	private final static String KEY_CONSUMER_SECRET = "TwitterSecret";
+	private final static String KEY_TWITPIC_API_KEY = "TwitPicAPIKey";
+
+	public static String KEY_TEXT = "SharedText";
 	public static String KEY_IMAGE_PATH = "SharedImagePath";
 
+	private static boolean encode_f = false;
+	
 	protected static void LogE(String msg, Exception e) {
 		Log.e(LOG_TAG, msg, e);
 		e.printStackTrace();
@@ -63,26 +74,59 @@ public class ShareTwitter implements InterfaceShare {
 	public ShareTwitter(Context context) {
 		mContext = (Activity) context;
 		mShareAdapter = this;
+		
+
+		Resources mResource = mContext.getResources();
+		CONSUMER_KEY = mResource.getString(R.string.consumar_key);
+		CONSUMER_SECRET = mResource.getString(R.string.consumar_secret);
+		TWITPIC_API_KEY = mResource.getString(R.string.twitpic_api_key);
+		LogD("key : " + CONSUMER_KEY);
+		LogD("secret : " + CONSUMER_SECRET);
+		LogD("twitpic : " + TWITPIC_API_KEY);
 	}
-	
 
 	@Override
 	public void configDeveloperInfo(Hashtable<String, String> cpInfo) {
 		LogD("initDeveloperInfo invoked " + cpInfo.toString());
 		try {
-			ShareTwitter.CONSUMER_KEY = cpInfo.get("TwitterKey");
-			ShareTwitter.CONSUMER_SECRET = cpInfo.get("TwitterSecret");
-			LogD("key : " + ShareTwitter.CONSUMER_KEY);
-			LogD("secret : " + ShareTwitter.CONSUMER_SECRET);
-			if(isInitialized){
+			if (isInitialized) {
 				return;
 			}
-			isInitialized = true;	
+			isInitialized = true;
+			
+			String _CONSUMER_KEY= cpInfo.get(KEY_CONSUMER_KEY);
+			if(_CONSUMER_KEY != null){
+				CONSUMER_KEY = _CONSUMER_KEY;
+			}
+			String _CONSUMER_SECRET= cpInfo.get(KEY_CONSUMER_SECRET);
+			if(_CONSUMER_SECRET != null){
+				CONSUMER_SECRET = _CONSUMER_SECRET;
+			}
+
+			String _TWITPIC_API_KEY= cpInfo.get(KEY_TWITPIC_API_KEY);
+			if(_TWITPIC_API_KEY != null){
+				TWITPIC_API_KEY = _TWITPIC_API_KEY;
+			}
+			
+			LogD("key : " + CONSUMER_KEY);
+			LogD("secret : " + CONSUMER_SECRET);
+			LogD("twitpic : " + TWITPIC_API_KEY);
+			
+			//support encode
+			try {
+				encode_f = Boolean.valueOf(cpInfo.get("encode_flag"));
+			} catch (Exception e) {
+				encode_f = false;
+			}
+
+			
 			PluginWrapper.runOnMainThread(new Runnable() {
-				
+
 				@Override
 				public void run() {
-					mTwitter =  new TwitterApp(PluginWrapper.getContext(), ShareTwitter.CONSUMER_KEY, ShareTwitter.CONSUMER_SECRET);
+					mTwitter = new TwitterApp(PluginWrapper.getContext(),
+							ShareTwitter.CONSUMER_KEY,
+							ShareTwitter.CONSUMER_SECRET);
 					mTwitter.setListener(mTwLoginDialogListener);
 				}
 			});
@@ -95,21 +139,21 @@ public class ShareTwitter implements InterfaceShare {
 	@Override
 	public void share(Hashtable<String, String> info) {
 		LogD("share invoked " + info.toString());
-		mShareInfo =  info;
-		if (! networkReachable()) {
+		mShareInfo = info;
+		if (!networkReachable()) {
 			shareResult(ShareWrapper.SHARERESULT_FAIL, "Network error!");
 			return;
 		}
 
-		if (! isInitialized) {
+		if (!isInitialized) {
 			shareResult(ShareWrapper.SHARERESULT_FAIL, "Initialize failed!");
 			return;
 		}
 
 		// need login
-		if(!mTwitter.hasAccessToken()){
+		if (!mTwitter.hasAccessToken()) {
 			PluginWrapper.runOnMainThread(new Runnable() {
-				
+
 				@Override
 				public void run() {
 					mTwitter.authorize();
@@ -118,9 +162,9 @@ public class ShareTwitter implements InterfaceShare {
 
 			return;
 		}
-		
+
 		PluginWrapper.runOnMainThread(new Runnable() {
-			
+
 			@Override
 			public void run() {
 				ShareTwitter.sendToTwitter();
@@ -135,13 +179,14 @@ public class ShareTwitter implements InterfaceShare {
 
 	@Override
 	public String getSDKVersion() {
-		return "Unknown version";
+		return "4.0.1";
 	}
 
 	private boolean networkReachable() {
 		boolean bRet = false;
 		try {
-			ConnectivityManager conn = (ConnectivityManager)mContext.getSystemService(Context.CONNECTIVITY_SERVICE);
+			ConnectivityManager conn = (ConnectivityManager) mContext
+					.getSystemService(Context.CONNECTIVITY_SERVICE);
 			NetworkInfo netInfo = conn.getActiveNetworkInfo();
 			bRet = (null == netInfo) ? false : netInfo.isAvailable();
 		} catch (Exception e) {
@@ -157,13 +202,13 @@ public class ShareTwitter implements InterfaceShare {
 	}
 
 	private static final TwDialogListener mTwLoginDialogListener = new TwDialogListener() {
-		
+
 		@Override
 		public void onError(int flag, String value) {
 			LogD("Twitter connection failed!");
-			shareResult(ShareWrapper.SHARERESULT_FAIL, value);			
+			shareResult(ShareWrapper.SHARERESULT_FAIL, value);
 		}
-		
+
 		@Override
 		public void onComplete(String value) {
 			ShareTwitter.sendToTwitter();
@@ -172,12 +217,26 @@ public class ShareTwitter implements InterfaceShare {
 
 	private static void sendToTwitter() {
 		String text = mShareInfo.get(KEY_TEXT);
-		String imagePath = mShareInfo.get(KEY_IMAGE_PATH);				
+		String imagePath = mShareInfo.get(KEY_IMAGE_PATH);
 		try {
-			if(imagePath != null && imagePath.length() > 0){
-				mTwitter.updateStatus(text, imagePath);
-			}else{
-				mTwitter.updateStatus(text);	
+			if(encode_f){
+				try{
+					text = URLDecoder.decode(text,"utf-8");
+				}
+				catch(Exception ex){}
+			}
+			
+			if (imagePath != null && imagePath.length() > 0) {
+				if (TWITPIC_API_KEY != null && !"".equals(TWITPIC_API_KEY)) {
+					String url = mTwitter.updateStatusTwitPic(
+							text,imagePath, TWITPIC_API_KEY);
+					mTwitter.updateStatus(text + " " + url);
+				}
+				else{
+					mTwitter.updateStatus(text, imagePath);
+				}
+			} else {
+				mTwitter.updateStatus(text);
 			}
 			LogD("Posted to Twitter!");
 			shareResult(ShareWrapper.SHARERESULT_SUCCESS, "Share succeed!");
