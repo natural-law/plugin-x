@@ -20,7 +20,7 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
-****************************************************************************/
+ ****************************************************************************/
 package org.cocos2dx.plugin;
 
 import java.util.HashSet;
@@ -28,13 +28,17 @@ import java.util.Hashtable;
 import java.util.Iterator;
 import java.util.Set;
 
-import com.google.ads.*;
-import com.google.ads.AdRequest.ErrorCode;
-
 import android.app.Activity;
 import android.content.Context;
 import android.util.Log;
 import android.view.WindowManager;
+
+import com.google.ads.Ad;
+import com.google.ads.AdListener;
+import com.google.ads.AdRequest;
+import com.google.ads.AdRequest.ErrorCode;
+import com.google.ads.AdSize;
+import com.google.ads.AdView;
 
 public class AdsAdmob implements InterfaceAds {
 
@@ -71,6 +75,18 @@ public class AdsAdmob implements InterfaceAds {
 	public AdsAdmob(Context context) {
 		mContext = (Activity) context;
 		mAdapter = this;
+
+		m_r = mContext.getResources();
+		android.util.DisplayMetrics metrics = new android.util.DisplayMetrics();
+		mContext.getWindowManager().getDefaultDisplay().getMetrics(metrics);
+		m_density = (int) metrics.density;
+	}
+
+	private static android.content.res.Resources m_r = null;
+	private static int m_density = 0;
+
+	public static int dens(int val) {
+		return val * m_density;
 	}
 
 	@Override
@@ -80,13 +96,16 @@ public class AdsAdmob implements InterfaceAds {
 
 	@Override
 	public String getSDKVersion() {
-		return "6.3.1";
+		return "6.4.1";
 	}
 
 	@Override
 	public void configDeveloperInfo(Hashtable<String, String> devInfo) {
 		try {
 			mPublishID = devInfo.get("AdmobID");
+			if(mPublishID==null){
+				mPublishID = m_r.getString(org.cocos2dx.libAdsAdmob.R.string.adUnitId);
+			}
 			LogD("init AppInfo : " + mPublishID);
 		} catch (Exception e) {
 			LogE("initAppInfo, The format of appInfo is wrong", e);
@@ -95,28 +114,26 @@ public class AdsAdmob implements InterfaceAds {
 
 	@Override
 	public void showAds(Hashtable<String, String> info, int pos) {
-	    try
-	    {
-	        String strType = info.get("AdmobType");
-	        int adsType = Integer.parseInt(strType);
+		try {
+			String strType = info.get("AdmobType");
+			int adsType = Integer.parseInt(strType);
 
-	        switch (adsType) {
-	        case ADMOB_TYPE_BANNER:
-	            {
-	                String strSize = info.get("AdmobSizeEnum");
-	                int sizeEnum = Integer.parseInt(strSize);
-    	            showBannerAd(sizeEnum, pos);
-                    break;
-	            }
-	        case ADMOB_TYPE_FULLSCREEN:
-	            LogD("Now not support full screen view in Admob");
-	            break;
-	        default:
-	            break;
-	        }
-	    } catch (Exception e) {
-	        LogE("Error when show Ads ( " + info.toString() + " )", e);
-	    }
+			switch (adsType) {
+			case ADMOB_TYPE_BANNER: {
+				String strSize = info.get("AdmobSizeEnum");
+				int sizeEnum = Integer.parseInt(strSize);
+				showBannerAd(sizeEnum, pos);
+				break;
+			}
+			case ADMOB_TYPE_FULLSCREEN:
+				LogD("Now not support full screen view in Admob");
+				break;
+			default:
+				break;
+			}
+		} catch (Exception e) {
+			LogE("Error when show Ads ( " + info.toString() + " )", e);
+		}
 	}
 
 	@Override
@@ -126,24 +143,23 @@ public class AdsAdmob implements InterfaceAds {
 
 	@Override
 	public void hideAds(Hashtable<String, String> info) {
-	    try
-        {
-            String strType = info.get("AdmobType");
-            int adsType = Integer.parseInt(strType);
+		try {
+			String strType = info.get("AdmobType");
+			int adsType = Integer.parseInt(strType);
 
-            switch (adsType) {
-            case ADMOB_TYPE_BANNER:
-                hideBannerAd();
-                break;
-            case ADMOB_TYPE_FULLSCREEN:
-                LogD("Now not support full screen view in Admob");
-                break;
-            default:
-                break;
-            }
-        } catch (Exception e) {
-            LogE("Error when hide Ads ( " + info.toString() + " )", e);
-        }
+			switch (adsType) {
+			case ADMOB_TYPE_BANNER:
+				hideBannerAd();
+				break;
+			case ADMOB_TYPE_FULLSCREEN:
+				LogD("Now not support full screen view in Admob");
+				break;
+			default:
+				break;
+			}
+		} catch (Exception e) {
+			LogE("Error when hide Ads ( " + info.toString() + " )", e);
+		}
 	}
 
 	private void showBannerAd(int sizeEnum, int pos) {
@@ -178,31 +194,36 @@ public class AdsAdmob implements InterfaceAds {
 					size = AdSize.IAB_LEADERBOARD;
 					break;
 				case AdsAdmob.ADMOB_SIZE_Skyscraper:
-				    size = AdSize.IAB_WIDE_SKYSCRAPER;
-				    break;
+					size = AdSize.IAB_WIDE_SKYSCRAPER;
+					break;
 				default:
 					break;
 				}
 				adView = new AdView(mContext, size, mPublishID);
 				AdRequest req = new AdRequest();
-				
+
 				try {
 					if (mTestDevices != null) {
 						Iterator<String> ir = mTestDevices.iterator();
-						while(ir.hasNext())
-						{
+						while (ir.hasNext()) {
 							req.addTestDevice(ir.next());
 						}
 					}
 				} catch (Exception e) {
 					LogE("Error during add test device", e);
 				}
-				
+
 				adView.loadAd(req);
 				adView.setAdListener(new AdmobAdsListener());
 
 				if (null == mWm) {
 					mWm = (WindowManager) mContext.getSystemService("window");
+				}
+				if (size == AdSize.BANNER) {
+					AdsWrapper.addAdView(mWm, adView, dens(320), dens(50),
+							curPos);
+				} else {
+					AdsWrapper.addAdView(mWm, adView, curPos);
 				}
 				AdsWrapper.addAdView(mWm, adView, curPos);
 			}
@@ -237,7 +258,8 @@ public class AdsAdmob implements InterfaceAds {
 		@Override
 		public void onDismissScreen(Ad arg0) {
 			LogD("onDismissScreen invoked");
-			AdsWrapper.onAdsResult(mAdapter, AdsWrapper.RESULT_CODE_AdsDismissed, "Ads view dismissed!");
+			AdsWrapper.onAdsResult(mAdapter,
+					AdsWrapper.RESULT_CODE_AdsDismissed, "Ads view dismissed!");
 		}
 
 		@Override
@@ -246,7 +268,7 @@ public class AdsAdmob implements InterfaceAds {
 			String errorMsg = "Unknow error";
 			switch (arg1) {
 			case NETWORK_ERROR:
-				errorNo =  AdsWrapper.RESULT_CODE_NetworkError;
+				errorNo = AdsWrapper.RESULT_CODE_NetworkError;
 				errorMsg = "Network error";
 				break;
 			case INVALID_REQUEST:
@@ -271,13 +293,16 @@ public class AdsAdmob implements InterfaceAds {
 		@Override
 		public void onPresentScreen(Ad arg0) {
 			LogD("onPresentScreen invoked");
-			AdsWrapper.onAdsResult(mAdapter, AdsWrapper.RESULT_CODE_AdsShown, "Ads view shown!");
+			AdsWrapper.onAdsResult(mAdapter, AdsWrapper.RESULT_CODE_AdsShown,
+					"Ads view shown!");
 		}
 
 		@Override
 		public void onReceiveAd(Ad arg0) {
 			LogD("onReceiveAd invoked");
-			AdsWrapper.onAdsResult(mAdapter, AdsWrapper.RESULT_CODE_AdsReceived, "Ads request received success!");
+			AdsWrapper.onAdsResult(mAdapter,
+					AdsWrapper.RESULT_CODE_AdsReceived,
+					"Ads request received success!");
 		}
 	}
 
@@ -286,8 +311,8 @@ public class AdsAdmob implements InterfaceAds {
 		return "0.2.0";
 	}
 
-    @Override
-    public void queryPoints() {
-        LogD("Admob not support query points!");
-    }
+	@Override
+	public void queryPoints() {
+		LogD("Admob not support query points!");
+	}
 }
