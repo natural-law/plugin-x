@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+<!-- //SNS support setting -->
+	<string name="consumar_key"></string>
+    <string name="consumar_secret"></string>
+    <string name="twitpic_api_key"></string>
+	
+	<string name="callback_host"></string>
+    <string name="callback_scheme"></string>
+
+</resources>
